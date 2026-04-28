@@ -3,7 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const SETTINGS_KEY = 'roadguardian_settings_v1';
     const defaultSettings = {
         historyLimit: 200,
-        highlightCritical: true
+        highlightCritical: true,
+        cctvDetectionMode: 'loose'
     };
     const appState = {
         settings: loadSettings(),
@@ -16,6 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaultLng = 77.2090;
     
     const map = L.map('map').setView([defaultLat, defaultLng], 13);
+    let currentLat = defaultLat;
+    let currentLng = defaultLng;
     
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
@@ -26,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMarker = L.marker([defaultLat, defaultLng]).addTo(map)
         .bindPopup('System Initialized.<br> Waiting for tracking data.')
         .openPopup();
+    let locationWatchId = null;
 
     // 2. Initialize Socket.IO
     const socket = io();
@@ -33,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     hydrateSettingsUi();
     renderAllHistoryViews();
     updateAnalytics();
+    fetchStatus();
 
     // Listen for new alerts
     socket.on('new_alert', (data) => {
@@ -60,6 +65,21 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(data => {
                 updateStatusIndicator('driver-status-text', data.driver_status);
                 updateStatusIndicator('cctv-status-text', data.cctv_status);
+                if (data.live_location && data.live_location.lat && data.live_location.lng) {
+                    updateMapLocation(data.live_location.lat, data.live_location.lng, data.live_location.address || 'Live location');
+                }
+                const modeHelp = document.getElementById('cctv-mode-help');
+                const modeSelect = document.getElementById('cctv-detection-mode-select');
+                if (modeSelect && data.cctv_detection_mode) {
+                    modeSelect.value = data.cctv_detection_mode;
+                    appState.settings.cctvDetectionMode = data.cctv_detection_mode;
+                }
+                if (modeHelp) {
+                    modeHelp.textContent = data.cctv_yolo_available
+                        ? 'YOLO is available. You can use Specific mode.'
+                        : 'YOLO not installed. Specific mode requires: pip install ultralytics';
+                    modeHelp.style.color = data.cctv_yolo_available ? 'var(--success)' : 'var(--warning)';
+                }
             })
             .catch(error => console.error('Error fetching status:', error));
     }
@@ -91,6 +111,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateMapLocation(lat, lng, popupMessage) {
         const newLatLng = new L.LatLng(lat, lng);
+        currentLat = lat;
+        currentLng = lng;
+        updateMapCoordsText();
         map.setView(newLatLng, 15);
         
         if (currentMarker) {
@@ -110,6 +133,13 @@ document.addEventListener('DOMContentLoaded', () => {
         currentMarker = L.marker(newLatLng, {icon: redIcon}).addTo(map)
             .bindPopup(`<b>EMERGENCY ALERT</b><br>${popupMessage}`)
             .openPopup();
+    }
+
+    function updateMapCoordsText() {
+        const coordsEl = document.getElementById('map-coords');
+        if (coordsEl) {
+            coordsEl.textContent = `Lat: ${Number(currentLat).toFixed(5)}, Lng: ${Number(currentLng).toFixed(5)}`;
+        }
     }
 
     function updateStatusIndicator(elementId, statusText) {
@@ -168,6 +198,16 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAnalytics();
         triggerSystemAlarm();
     });
+
+    const openMapsBtn = document.getElementById('open-maps-btn');
+    if (openMapsBtn) {
+        openMapsBtn.addEventListener('click', () => {
+            const mapsUrl = `https://www.google.com/maps?q=${currentLat},${currentLng}`;
+            window.open(mapsUrl, '_blank', 'noopener,noreferrer');
+        });
+    }
+    updateMapCoordsText();
+    startBrowserGeolocation();
 
     // 6. CCTV sample video upload
     const uploadButton = document.getElementById('upload-cctv-btn');
@@ -246,18 +286,44 @@ document.addEventListener('DOMContentLoaded', () => {
             const historyLimitInput = document.getElementById('history-limit-input');
             const highlightCriticalToggle = document.getElementById('critical-highlight-toggle');
             const settingsMessage = document.getElementById('settings-message');
+            const cctvModeSelect = document.getElementById('cctv-detection-mode-select');
             const parsedLimit = parseInt(historyLimitInput.value, 10);
             appState.settings.historyLimit = Number.isFinite(parsedLimit) ? Math.max(20, Math.min(parsedLimit, 1000)) : defaultSettings.historyLimit;
             appState.settings.highlightCritical = !!highlightCriticalToggle.checked;
-            persistSettings();
-            trimHistoryToLimit();
-            persistHistory();
-            renderAllHistoryViews();
-            updateAnalytics();
-            if (settingsMessage) {
-                settingsMessage.textContent = 'Settings saved successfully.';
-                settingsMessage.style.color = 'var(--success)';
-            }
+            appState.settings.cctvDetectionMode = cctvModeSelect ? cctvModeSelect.value : 'loose';
+
+            fetch('/api/cctv_detection_mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: appState.settings.cctvDetectionMode })
+            })
+                .then(async (res) => {
+                    const payload = await res.json();
+                    if (!res.ok || !payload.ok) {
+                        throw new Error(payload.message || 'Failed to update CCTV detection mode');
+                    }
+                    appState.settings.cctvDetectionMode = payload.mode || appState.settings.cctvDetectionMode;
+                    persistSettings();
+                    trimHistoryToLimit();
+                    persistHistory();
+                    renderAllHistoryViews();
+                    updateAnalytics();
+                    fetchStatus();
+                    if (settingsMessage) {
+                        settingsMessage.textContent = `Settings saved. ${payload.message}`;
+                        settingsMessage.style.color = 'var(--success)';
+                    }
+                    const cctvFeedImg = document.getElementById('cctv-feed-img');
+                    if (cctvFeedImg) {
+                        cctvFeedImg.src = `/cctv_video_feed?ts=${Date.now()}`;
+                    }
+                })
+                .catch((err) => {
+                    if (settingsMessage) {
+                        settingsMessage.textContent = `Settings save failed: ${err.message}`;
+                        settingsMessage.style.color = 'var(--danger)';
+                    }
+                });
         });
     }
 
@@ -326,8 +392,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function hydrateSettingsUi() {
         const historyLimitInput = document.getElementById('history-limit-input');
         const highlightCriticalToggle = document.getElementById('critical-highlight-toggle');
+        const cctvModeSelect = document.getElementById('cctv-detection-mode-select');
         if (historyLimitInput) historyLimitInput.value = String(appState.settings.historyLimit);
         if (highlightCriticalToggle) highlightCriticalToggle.checked = !!appState.settings.highlightCritical;
+        if (cctvModeSelect) cctvModeSelect.value = appState.settings.cctvDetectionMode || 'loose';
     }
 
     function renderAllHistoryViews() {
@@ -373,6 +441,43 @@ document.addEventListener('DOMContentLoaded', () => {
         if (el) {
             el.textContent = String(value);
         }
+    }
+
+    function startBrowserGeolocation() {
+        if (!('geolocation' in navigator)) {
+            console.warn('Geolocation API unavailable in this browser.');
+            return;
+        }
+
+        const onPosition = (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            updateMapLocation(lat, lng, 'Live Browser GPS');
+            fetch('/api/location/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    lat,
+                    lng,
+                    address: 'Live Browser GPS'
+                })
+            }).catch((err) => console.error('Location sync failed:', err));
+        };
+
+        const onError = (err) => {
+            console.warn('Geolocation error:', err.message);
+        };
+
+        const options = {
+            enableHighAccuracy: true,
+            maximumAge: 5000,
+            timeout: 10000
+        };
+
+        // initial single-shot
+        navigator.geolocation.getCurrentPosition(onPosition, onError, options);
+        // then continuous updates
+        locationWatchId = navigator.geolocation.watchPosition(onPosition, onError, options);
     }
 });
 
