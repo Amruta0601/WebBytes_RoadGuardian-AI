@@ -1,4 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const HISTORY_KEY = 'roadguardian_alert_history_v1';
+    const SETTINGS_KEY = 'roadguardian_settings_v1';
+    const defaultSettings = {
+        historyLimit: 200,
+        highlightCritical: true
+    };
+    const appState = {
+        settings: loadSettings(),
+        alertHistory: loadHistory()
+    };
+
     // 1. Initialize Map
     // Default mock location for initialization
     const defaultLat = 28.6139;
@@ -18,11 +29,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Initialize Socket.IO
     const socket = io();
+    setupNavigation();
+    hydrateSettingsUi();
+    renderAllHistoryViews();
+    updateAnalytics();
 
     // Listen for new alerts
     socket.on('new_alert', (data) => {
         console.log('Received Alert:', data);
         addLogEntry(data.type, data.message, data.severity, data.timestamp);
+        pushAlertHistory(data);
+        renderAllHistoryViews();
+        updateAnalytics();
         
         // Update Map if location is provided
         if (data.location && data.location.lat && data.location.lng) {
@@ -114,6 +132,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function triggerSystemAlarm() {
+        if (!appState.settings.highlightCritical) {
+            return;
+        }
         const overallStatus = document.getElementById('overall-status');
         overallStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> EMERGENCY ACTIVE';
         overallStatus.className = 'status-badge danger';
@@ -136,6 +157,222 @@ document.addEventListener('DOMContentLoaded', () => {
         socket.emit('trigger_sos', { user: 'Admin' }); // Optional backend listener
         
         addLogEntry('MANUAL_SOS', 'Manual emergency trigger activated by user.', 'critical', timeStr);
+        pushAlertHistory({
+            type: 'MANUAL_SOS',
+            message: 'Manual emergency trigger activated by user.',
+            severity: 'critical',
+            timestamp: timeStr,
+            location: { lat: defaultLat, lng: defaultLng }
+        });
+        renderAllHistoryViews();
+        updateAnalytics();
         triggerSystemAlarm();
     });
+
+    // 6. CCTV sample video upload
+    const uploadButton = document.getElementById('upload-cctv-btn');
+    const fileInput = document.getElementById('cctv-video-file');
+    const uploadMessage = document.getElementById('upload-cctv-message');
+    const cctvFeedImg = document.getElementById('cctv-feed-img');
+
+    if (uploadButton && fileInput && uploadMessage && cctvFeedImg) {
+        uploadButton.addEventListener('click', async () => {
+            if (!fileInput.files || fileInput.files.length === 0) {
+                uploadMessage.textContent = 'Please choose a traffic sample video first.';
+                uploadMessage.style.color = 'var(--warning)';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('video', fileInput.files[0]);
+
+            uploadButton.disabled = true;
+            uploadButton.textContent = 'Uploading...';
+            uploadMessage.textContent = 'Uploading and switching CCTV source...';
+            uploadMessage.style.color = 'var(--text-secondary)';
+
+            try {
+                const response = await fetch('/api/upload_cctv_video', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.error || 'Upload failed');
+                }
+
+                uploadMessage.textContent = data.message;
+                uploadMessage.style.color = 'var(--success)';
+                cctvFeedImg.src = `/cctv_video_feed?ts=${Date.now()}`;
+            } catch (error) {
+                uploadMessage.textContent = `Upload failed: ${error.message}`;
+                uploadMessage.style.color = 'var(--danger)';
+            } finally {
+                uploadButton.disabled = false;
+                uploadButton.textContent = 'Upload Traffic Sample';
+            }
+        });
+    }
+
+    // 7. Alerts/Analytics/Settings interactions
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
+    const exportHistoryBtn = document.getElementById('export-history-btn');
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
+
+    if (clearHistoryBtn) {
+        clearHistoryBtn.addEventListener('click', () => {
+            appState.alertHistory = [];
+            persistHistory();
+            renderAllHistoryViews();
+            updateAnalytics();
+        });
+    }
+
+    if (exportHistoryBtn) {
+        exportHistoryBtn.addEventListener('click', () => {
+            const blob = new Blob([JSON.stringify(appState.alertHistory, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = `roadguardian-alert-history-${Date.now()}.json`;
+            anchor.click();
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', () => {
+            const historyLimitInput = document.getElementById('history-limit-input');
+            const highlightCriticalToggle = document.getElementById('critical-highlight-toggle');
+            const settingsMessage = document.getElementById('settings-message');
+            const parsedLimit = parseInt(historyLimitInput.value, 10);
+            appState.settings.historyLimit = Number.isFinite(parsedLimit) ? Math.max(20, Math.min(parsedLimit, 1000)) : defaultSettings.historyLimit;
+            appState.settings.highlightCritical = !!highlightCriticalToggle.checked;
+            persistSettings();
+            trimHistoryToLimit();
+            persistHistory();
+            renderAllHistoryViews();
+            updateAnalytics();
+            if (settingsMessage) {
+                settingsMessage.textContent = 'Settings saved successfully.';
+                settingsMessage.style.color = 'var(--success)';
+            }
+        });
+    }
+
+    function setupNavigation() {
+        const navItems = document.querySelectorAll('.nav-item');
+        const contentViews = document.querySelectorAll('.content-view');
+        navItems.forEach((item) => {
+            item.addEventListener('click', () => {
+                const targetView = item.getAttribute('data-view');
+                navItems.forEach((nav) => nav.classList.remove('active'));
+                item.classList.add('active');
+                contentViews.forEach((view) => {
+                    view.classList.toggle('active', view.id === `view-${targetView}`);
+                });
+            });
+        });
+    }
+
+    function loadHistory() {
+        try {
+            const raw = localStorage.getItem(HISTORY_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+
+    function persistHistory() {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(appState.alertHistory));
+    }
+
+    function pushAlertHistory(alert) {
+        appState.alertHistory.unshift({
+            type: alert.type || 'SYSTEM',
+            message: alert.message || 'No message provided.',
+            severity: (alert.severity || 'info').toLowerCase(),
+            timestamp: alert.timestamp || new Date().toISOString(),
+            location: alert.location || null
+        });
+        trimHistoryToLimit();
+        persistHistory();
+    }
+
+    function trimHistoryToLimit() {
+        if (appState.alertHistory.length > appState.settings.historyLimit) {
+            appState.alertHistory = appState.alertHistory.slice(0, appState.settings.historyLimit);
+        }
+    }
+
+    function loadSettings() {
+        try {
+            const raw = localStorage.getItem(SETTINGS_KEY);
+            if (!raw) return { ...defaultSettings };
+            return { ...defaultSettings, ...JSON.parse(raw) };
+        } catch {
+            return { ...defaultSettings };
+        }
+    }
+
+    function persistSettings() {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(appState.settings));
+    }
+
+    function hydrateSettingsUi() {
+        const historyLimitInput = document.getElementById('history-limit-input');
+        const highlightCriticalToggle = document.getElementById('critical-highlight-toggle');
+        if (historyLimitInput) historyLimitInput.value = String(appState.settings.historyLimit);
+        if (highlightCriticalToggle) highlightCriticalToggle.checked = !!appState.settings.highlightCritical;
+    }
+
+    function renderAllHistoryViews() {
+        renderHistoryList('alerts-history-list', appState.alertHistory);
+        renderHistoryList('analytics-recent-list', appState.alertHistory.slice(0, 10));
+    }
+
+    function renderHistoryList(containerId, items) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        if (!items.length) {
+            container.innerHTML = '<div class="history-row"><div><strong>No history yet</strong><small>Incoming alerts will appear here.</small></div></div>';
+            return;
+        }
+        container.innerHTML = items.map((item) => {
+            const safeSeverity = (item.severity || 'info').toLowerCase();
+            const locationText = item.location && item.location.address ? ` | ${item.location.address}` : '';
+            return `
+                <div class="history-row">
+                    <div>
+                        <strong>[${item.type}] ${item.message}</strong>
+                        <small>${item.timestamp}${locationText}</small>
+                    </div>
+                    <span class="history-severity ${safeSeverity}">${safeSeverity}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function updateAnalytics() {
+        const total = appState.alertHistory.length;
+        const critical = appState.alertHistory.filter((a) => a.severity === 'critical').length;
+        const drowsy = appState.alertHistory.filter((a) => a.type === 'DROWSINESS').length;
+        const cctv = appState.alertHistory.filter((a) => a.type === 'CCTV_CRASH').length;
+        setMetric('metric-total-alerts', total);
+        setMetric('metric-critical-alerts', critical);
+        setMetric('metric-drowsy-alerts', drowsy);
+        setMetric('metric-cctv-alerts', cctv);
+    }
+
+    function setMetric(id, value) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = String(value);
+        }
+    }
 });
+
