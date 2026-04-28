@@ -1,5 +1,5 @@
 import os
-import threading
+import socket
 import time
 from flask import Flask, render_template, Response, jsonify, request
 from flask_socketio import SocketIO
@@ -10,7 +10,8 @@ from ai_modules.cctv_monitor import CCTVMonitor
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "uploads")
-socketio = SocketIO(app, cors_allowed_origins="*")
+# Force standard threading mode to avoid Eventlet on Windows.
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 ALLOWED_VIDEO_EXTENSIONS = {"mp4", "avi", "mov", "mkv", "webm"}
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -55,6 +56,17 @@ def allowed_video_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_VIDEO_EXTENSIONS
 
 
+def pick_available_port(start_port):
+    port = start_port
+    while port < start_port + 20:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                return port
+        port += 1
+    return start_port
+
+
 @app.route("/api/upload_cctv_video", methods=["POST"])
 def upload_cctv_video():
     if "video" not in request.files:
@@ -97,4 +109,14 @@ def handle_trigger_sos(data):
     )
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=5001, allow_unsafe_werkzeug=True)
+    requested_port = int(os.environ.get("PORT", "5001"))
+    run_port = pick_available_port(requested_port)
+    if run_port != requested_port:
+        print(f"Port {requested_port} busy, using {run_port} instead.")
+    socketio.run(
+        app,
+        debug=True,
+        port=run_port,
+        allow_unsafe_werkzeug=True,
+        use_reloader=False,
+    )
