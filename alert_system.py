@@ -9,8 +9,21 @@ class AlertSystem:
         self.socketio = socketio
         self.last_alert_time = 0
         self.cooldown = 5  # Prevent spamming alerts
+        self.latest_live_location = None
+        self.latest_live_location_ts = 0.0
+
+    def update_live_location(self, lat, lng, address="Browser GPS"):
+        self.latest_live_location = {
+            "lat": float(lat),
+            "lng": float(lng),
+            "address": address or "Browser GPS",
+        }
+        self.latest_live_location_ts = time.time()
 
     def get_location(self):
+        # Prefer browser GPS location when recently updated.
+        if self.latest_live_location and (time.time() - self.latest_live_location_ts) <= 120:
+            return self.latest_live_location
         try:
             g = geocoder.ip("me")
             if g.latlng:
