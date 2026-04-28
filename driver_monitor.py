@@ -31,6 +31,8 @@ class DriverMonitor:
         self.blink_counter = 0
         self.yawn_counter = 0
         self.no_movement_counter = 0
+        self.posture_counter = 0
+        self.position_counter = 0
 
     def _dist(self, a, b):
         a = np.asarray(a, dtype=np.float32)
@@ -134,6 +136,9 @@ class DriverMonitor:
 
                 h, w, _ = frame.shape
                 current_status = "Safe"
+                eye_state = "Alert"
+                chest_state = "Normal"
+                position_state = "Centered"
 
                 if results_mesh.multi_face_landmarks:
                     self.no_movement_counter = 0
@@ -167,6 +172,7 @@ class DriverMonitor:
                             self.blink_counter += 1
                             if self.blink_counter >= self.EAR_CONSEC_FRAMES:
                                 current_status = "Drowsy"
+                                eye_state = "Drowsy"
                                 cv2.putText(
                                     frame,
                                     "DROWSINESS DETECTED!",
@@ -183,6 +189,7 @@ class DriverMonitor:
                                 )
                         else:
                             self.blink_counter = 0
+                            eye_state = "Alert"
 
                         for pt in left_eye + right_eye:
                             cv2.circle(frame, tuple(pt), 1, (0, 255, 0), -1)
@@ -198,12 +205,50 @@ class DriverMonitor:
                 if results_pose.pose_landmarks:
                     landmarks = results_pose.pose_landmarks.landmark
                     nose_y = landmarks[mp_pose.PoseLandmark.NOSE.value].y
+                    nose_x = landmarks[mp_pose.PoseLandmark.NOSE.value].x
+                    left_shoulder = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value]
+                    right_shoulder = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
                     shoulder_y = (
-                        landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y
-                        + landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y
+                        left_shoulder.y
+                        + right_shoulder.y
                     ) / 2
+                    shoulder_x = (left_shoulder.x + right_shoulder.x) / 2
+                    shoulder_tilt = abs(left_shoulder.y - right_shoulder.y)
+                    horizontal_offset = abs(nose_x - shoulder_x)
+
+                    # Chest posture: shoulder tilt generally increases when driver slouches/leans.
+                    if shoulder_tilt > 0.12:
+                        self.posture_counter += 1
+                        chest_state = "Tilted"
+                        if self.posture_counter > 12:
+                            current_status = "Poor Chest Posture"
+                            self.alert_system.trigger_alert(
+                                "POSTURE_WARNING",
+                                "Driver chest posture appears tilted. Please sit upright.",
+                                "medium",
+                            )
+                    else:
+                        self.posture_counter = max(0, self.posture_counter - 1)
+                        chest_state = "Normal"
+
+                    # Driving position: head excessively off-center can indicate unsafe posture.
+                    if horizontal_offset > 0.17:
+                        self.position_counter += 1
+                        position_state = "Off-Center"
+                        if self.position_counter > 12:
+                            current_status = "Unsafe Driving Position"
+                            self.alert_system.trigger_alert(
+                                "DRIVING_POSITION",
+                                "Driver position is off-center. Please align with seat and wheel.",
+                                "medium",
+                            )
+                    else:
+                        self.position_counter = max(0, self.position_counter - 1)
+                        position_state = "Centered"
+
                     if (shoulder_y - nose_y) < 0.1:
                         current_status = "Collapse/Emergency"
+                        chest_state = "Collapse Risk"
                         cv2.putText(
                             frame,
                             "EMERGENCY: COLLAPSE DETECTED!",
@@ -223,6 +268,15 @@ class DriverMonitor:
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.7,
                     (0, 255, 0) if self.status == "Safe" else (0, 0, 255),
+                    2,
+                )
+                cv2.putText(
+                    frame,
+                    f"Eyes: {eye_state} | Chest: {chest_state} | Position: {position_state}",
+                    (10, h - 45),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.58,
+                    (255, 255, 0),
                     2,
                 )
 
