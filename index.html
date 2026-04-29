@@ -1,208 +1,276 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Accident Prevention & Alert Platform</title>
-    
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-    
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
-    <!-- Leaflet CSS for Map -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeGuard AI — Smart Accident Prevention & Alert Platform</title>
+  <meta name="description" content="AI-powered real-time driver monitoring, accident detection and emergency alert platform." />
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
 </head>
 <body>
-    <div class="dashboard-container">
-        <!-- Sidebar -->
-        <aside class="sidebar glass-panel">
-            <div class="logo">
-                <i class="fas fa-shield-alt icon-glow"></i>
-                <h2>SafeGuard AI</h2>
-            </div>
-            <nav>
-                <ul>
-                    <li class="active nav-item" data-view="cameras"><i class="fas fa-video"></i> Cameras</li>
-                    <li class="nav-item" data-view="alerts"><i class="fas fa-bell"></i> Alerts</li>
-                    <li class="nav-item" data-view="analytics"><i class="fas fa-chart-line"></i> Analytics</li>
-                    <li class="nav-item" data-view="settings"><i class="fas fa-cog"></i> Settings</li>
-                </ul>
-            </nav>
-            <div class="emergency-button-container">
-                <button id="manual-emergency-btn" class="btn-danger glow-effect">
-                    <i class="fas fa-exclamation-triangle"></i> TRIGGER SOS
-                </button>
-            </div>
-        </aside>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <header class="topbar glass-panel">
-                <div class="status-summary">
-                    <div class="status-badge pulse-green" id="overall-status">
-                        <i class="fas fa-check-circle"></i> System Active
-                    </div>
-                </div>
-                <div class="user-profile">
-                    <img src="https://ui-avatars.com/api/?name=Admin+User&background=0D8ABC&color=fff" alt="User">
-                    <span>Admin User</span>
-                </div>
-            </header>
+<div id="alarm-overlay" class="alarm-overlay hidden"></div>
 
-            <section id="view-cameras" class="content-view active">
-                <div class="grid-container">
-                    <!-- Video Feeds -->
-                    <div class="video-section">
-                        <div class="video-card glass-panel">
-                            <div class="card-header">
-                                <h3><i class="fas fa-car-side"></i> In-Vehicle Driver Monitor</h3>
-                                <span class="status-indicator" id="driver-status-text">Safe</span>
-                            </div>
-                            <div class="video-feed">
-                                <img src="{{ url_for('driver_video_feed') }}" alt="Driver Feed" onerror="this.src='https://via.placeholder.com/640x480?text=Camera+Offline'">
-                            </div>
-                        </div>
+<div class="dashboard-container">
 
-                        <div class="video-card glass-panel">
-                            <div class="card-header">
-                                <h3><i class="fas fa-traffic-light"></i> External CCTV Monitor</h3>
-                                <span class="status-indicator" id="cctv-status-text">Normal Traffic</span>
-                            </div>
-                            <div class="video-feed">
-                                <img id="cctv-feed-img" src="{{ url_for('cctv_video_feed') }}" alt="CCTV Feed" onerror="this.src='https://via.placeholder.com/640x480?text=CCTV+Offline'">
-                            </div>
-                            <div class="upload-controls">
-                                <input id="cctv-video-file" type="file" accept="video/mp4,video/x-msvideo,video/quicktime,video/x-matroska,video/webm" />
-                                <button id="upload-cctv-btn" type="button" class="btn-danger compact">
-                                    Upload Traffic Sample
-                                </button>
-                            </div>
-                            <small id="upload-cctv-message" class="helper-text"></small>
-                        </div>
-                    </div>
-
-                    <!-- Right Sidebar (Map & Logs) -->
-                    <div class="info-section">
-                        <!-- Live Map -->
-                        <div class="map-card glass-panel">
-                            <div class="card-header">
-                                <h3><i class="fas fa-map-marker-alt"></i> Live GPS Tracking</h3>
-                            <button id="open-maps-btn" class="btn-secondary" type="button">Open Maps</button>
-                            </div>
-                            <div id="map" class="map-container"></div>
-                        <small id="map-coords" class="helper-text">Lat: 28.6139, Lng: 77.2090</small>
-                        </div>
-
-                        <!-- Event Logs -->
-                        <div class="log-card glass-panel">
-                            <div class="card-header">
-                                <h3><i class="fas fa-list-alt"></i> Emergency Event Log</h3>
-                            </div>
-                            <div class="log-container" id="event-log">
-                                <div class="log-item info">
-                                    <i class="fas fa-info-circle"></i>
-                                    <div class="log-details">
-                                        <span class="log-time">Just now</span>
-                                        <p>System initialized and monitoring started.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section id="view-alerts" class="content-view">
-                <div class="single-column">
-                    <div class="glass-panel panel-block">
-                        <div class="card-header">
-                            <h3><i class="fas fa-bell"></i> Alerts History</h3>
-                            <div class="actions-row">
-                                <button id="export-history-btn" class="btn-secondary">Export JSON</button>
-                                <button id="clear-history-btn" class="btn-danger compact">Clear History</button>
-                            </div>
-                        </div>
-                        <p class="section-subtitle">All incoming alerts are stored locally in your browser for quick review.</p>
-                        <div id="alerts-history-list" class="history-list"></div>
-                    </div>
-                </div>
-            </section>
-
-            <section id="view-analytics" class="content-view">
-                <div class="single-column">
-                    <div class="glass-panel panel-block">
-                        <div class="card-header">
-                            <h3><i class="fas fa-chart-line"></i> Safety Analytics</h3>
-                        </div>
-                        <div class="analytics-grid">
-                            <div class="metric-card">
-                                <span>Total Alerts</span>
-                                <strong id="metric-total-alerts">0</strong>
-                            </div>
-                            <div class="metric-card">
-                                <span>Critical Alerts</span>
-                                <strong id="metric-critical-alerts">0</strong>
-                            </div>
-                            <div class="metric-card">
-                                <span>Drowsiness Alerts</span>
-                                <strong id="metric-drowsy-alerts">0</strong>
-                            </div>
-                            <div class="metric-card">
-                                <span>CCTV Crash Alerts</span>
-                                <strong id="metric-cctv-alerts">0</strong>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="glass-panel panel-block">
-                        <div class="card-header">
-                            <h3><i class="fas fa-history"></i> Recent Activity (Last 10)</h3>
-                        </div>
-                        <div id="analytics-recent-list" class="history-list compact-list"></div>
-                    </div>
-                </div>
-            </section>
-
-            <section id="view-settings" class="content-view">
-                <div class="single-column">
-                    <div class="glass-panel panel-block">
-                        <div class="card-header">
-                            <h3><i class="fas fa-cog"></i> System Settings</h3>
-                        </div>
-                        <div class="settings-grid">
-                            <label class="setting-item">
-                                <span>History Retention Limit</span>
-                                <input id="history-limit-input" type="number" min="20" max="1000" value="200">
-                            </label>
-                            <label class="setting-item checkbox-item">
-                                <input id="critical-highlight-toggle" type="checkbox" checked>
-                                <span>Enable Critical Visual Highlight</span>
-                            </label>
-                            <label class="setting-item">
-                                <span>CCTV Detection Mode</span>
-                                <select id="cctv-detection-mode-select">
-                                    <option value="loose">Loose (motion objects)</option>
-                                    <option value="specific">Specific (YOLO vehicle-only)</option>
-                                </select>
-                            </label>
-                            <p id="cctv-mode-help" class="helper-text"></p>
-                            <button id="save-settings-btn" class="btn-secondary">Save Settings</button>
-                        </div>
-                        <p id="settings-message" class="helper-text"></p>
-                    </div>
-                </div>
-            </section>
-        </main>
+  <!-- ════════════════ SIDEBAR ════════════════ -->
+  <aside class="sidebar glass-panel">
+    <div class="logo">
+      <div class="logo-icon"><i class="fas fa-shield-halved"></i></div>
+      <div>
+        <h2>SafeGuard AI</h2>
+        <small>v2.0 — Live Monitor</small>
+      </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <nav>
+      <ul id="sidebar-nav">
+        <li class="nav-item active" data-tab="dashboard"><i class="fas fa-gauge-high"></i><span>Dashboard</span></li>
+        <li class="nav-item" data-tab="cameras"><i class="fas fa-video"></i><span>Cameras</span></li>
+        <li class="nav-item" data-tab="alerts"><i class="fas fa-bell"></i><span>Alerts</span></li>
+        <li class="nav-item" data-tab="analytics"><i class="fas fa-chart-line"></i><span>Analytics</span></li>
+        <li class="nav-item" data-tab="settings"><i class="fas fa-gear"></i><span>Settings</span></li>
+      </ul>
+    </nav>
+
+    <!-- Stats strip -->
+    <div class="stat-strip">
+      <div class="stat-item">
+        <span class="stat-val" id="stat-alerts">0</span>
+        <span class="stat-lbl">Alerts</span>
+      </div>
+      <div class="stat-sep"></div>
+      <div class="stat-item">
+        <span class="stat-val success" id="stat-cams">2</span>
+        <span class="stat-lbl">Cams</span>
+      </div>
+    </div>
+
+    <!-- Emergency info card -->
+    <div class="em-info-card" id="em-info-card">
+      <div class="em-info-header"><i class="fas fa-phone-volume"></i> Emergency Info</div>
+      <div class="em-info-row"><i class="fas fa-phone"></i> <a id="em-number" href="tel:8073174477">8073174477</a></div>
+      <div class="em-info-row"><i class="fas fa-location-dot"></i> <a id="em-map-link" href="https://maps.app.goo.gl/Jfmo2wB7Qj98zHTQ9?g_st=aw" target="_blank">Open live location ↗</a></div>
+      <div class="em-services" id="em-services">
+        <div class="svc-item hospital"><i class="fas fa-hospital"></i> <span>Victoria Hospital — 0.61 km</span></div>
+        <div class="svc-item police"><i class="fas fa-car-burst"></i> <span>Cubbon Park Police — 0.79 km</span></div>
+        <div class="svc-item ambulance"><i class="fas fa-truck-medical"></i> <span>CATS Ambulance — 1.12 km</span></div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button id="btn-sos" class="btn-sos pulse-red">
+        <i class="fas fa-triangle-exclamation"></i> SOS EMERGENCY
+      </button>
+    </div>
+  </aside>
+
+  <!-- ════════════════ MAIN ════════════════ -->
+  <main class="main-content">
+
+    <!-- Topbar -->
+    <header class="topbar glass-panel">
+      <div class="topbar-left">
+        <div class="status-badge" id="overall-status">
+          <span class="dot green-dot"></span>
+          <span id="overall-status-text">All Systems Active</span>
+        </div>
+        <div class="uptime-chip"><i class="fas fa-clock"></i> <span id="uptime-clock">00:00:00</span></div>
+      </div>
+      <div class="topbar-right">
+        <div class="user-chip">
+          <img src="https://ui-avatars.com/api/?name=Admin+User&background=3b82f6&color=fff&size=40" alt="Admin" />
+          <span>Admin</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Dashboard Tab -->
+    <div class="tab-content active-tab" id="tab-dashboard">
+      <div class="grid-container">
+
+        <!-- LEFT: Video Feeds -->
+        <section class="video-section">
+
+          <!-- Driver Feed -->
+          <div class="video-card glass-panel" id="driver-card">
+            <div class="card-header">
+              <div class="card-title">
+                <i class="fas fa-car-side card-icon blue-icon"></i>
+                <h3>In-Vehicle Driver Monitor</h3>
+              </div>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <span class="status-pill" id="driver-status-pill">
+                <span class="dot green-dot"></span> Safe
+              </span>
+              <button class="btn-stop-feed" id="stop-driver-feed" title="Stop Driver Camera">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+            <div class="detection-chips" id="driver-chips">
+              <span class="chip chip-ok" id="chip-eyes"><i class="fas fa-eye"></i> Eyes Open</span>
+              <span class="chip chip-ok" id="chip-chest"><i class="fas fa-heart-pulse"></i> Chest OK</span>
+              <span class="chip chip-ok" id="chip-pose"><i class="fas fa-person"></i> Posture OK</span>
+              <span class="chip chip-info" id="chip-people"><i class="fas fa-users"></i> People: —</span>
+            </div>
+            <div class="video-feed">
+              <img id="driver-feed-img"
+                   src="{{ url_for('driver_video_feed') }}"
+                   alt="Driver Feed"
+                   onerror="this.onerror=null;this.src='https://placehold.co/640x480/0f172a/3b82f6?text=Camera+Initialising...'" />
+            </div>
+          </div>
+
+          <!-- CCTV Feed -->
+          <div class="video-card glass-panel" id="cctv-card">
+            <div class="card-header">
+              <div class="card-title">
+                <i class="fas fa-traffic-light card-icon purple-icon"></i>
+                <h3>External CCTV Accident Detector</h3>
+              </div>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <span class="status-pill" id="cctv-status-pill">
+                <span class="dot grey-dot"></span> No Video
+              </span>
+              <button class="btn-stop-feed" id="stop-cctv-feed" title="Stop CCTV Feed">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+            <!-- Upload row -->
+            <div class="upload-row">
+              <label class="file-label" for="cctv-video-input">
+                <i class="fas fa-folder-open"></i>
+                <span id="file-chosen-label">Choose accident video…</span>
+              </label>
+              <input id="cctv-video-input" type="file"
+                     accept="video/mp4,video/avi,video/quicktime,video/x-matroska,video/webm" />
+              <button id="btn-upload-cctv" class="btn-upload">
+                <i class="fas fa-cloud-upload-alt"></i> Analyse
+              </button>
+            </div>
+            <div class="video-feed">
+              <img id="cctv-feed-img"
+                   src="{{ url_for('cctv_video_feed') }}"
+                   alt="CCTV Feed"
+                   onerror="this.onerror=null;this.src='https://placehold.co/640x480/0f172a/8b5cf6?text=Upload+CCTV+Video'" />
+            </div>
+          </div>
+
+        </section>
+
+        <!-- RIGHT: Map + Log -->
+        <aside class="info-section">
+
+          <!-- Map -->
+          <div class="map-card glass-panel">
+            <div class="card-header">
+              <div class="card-title">
+                <i class="fas fa-map-location-dot card-icon green-icon"></i>
+                <h3>Live Vehicle Location</h3>
+              </div>
+              <a id="open-maps-btn" href="https://maps.app.goo.gl/Jfmo2wB7Qj98zHTQ9?g_st=aw"
+                 target="_blank" class="btn-maps">
+                <i class="fas fa-up-right-from-square"></i> Open Maps
+              </a>
+            </div>
+            <div id="map" class="map-container"></div>
+            <div class="map-footer">
+              <i class="fas fa-location-crosshairs"></i>
+              <span id="map-coords">12.9716° N, 77.5946° E — Bengaluru</span>
+            </div>
+          </div>
+
+          <!-- Event log -->
+          <div class="log-card glass-panel">
+            <div class="card-header">
+              <div class="card-title">
+                <i class="fas fa-list-check card-icon orange-icon"></i>
+                <h3>Event Log</h3>
+              </div>
+              <button id="btn-clear-log" class="btn-sm">
+                <i class="fas fa-trash"></i> Clear
+              </button>
+            </div>
+            <div class="log-scroll" id="event-log">
+              <div class="log-item info">
+                <i class="fas fa-circle-info"></i>
+                <div class="log-detail">
+                  <span class="log-time" id="init-time"></span>
+                  <p>System initialised — monitoring active.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </aside>
+      </div>
+    </div>
+    
+    <!-- Other Tabs (Placeholders) -->
+    <div class="tab-content hidden" id="tab-cameras">
+      <div class="placeholder-card glass-panel">
+        <h2><i class="fas fa-video"></i> All Camera Feeds</h2>
+        <p>In a full deployment, all 360° vehicle camera feeds would be accessible here.</p>
+      </div>
+    </div>
+
+    <div class="tab-content hidden" id="tab-alerts">
+      <div class="placeholder-card glass-panel">
+        <h2><i class="fas fa-bell"></i> Alert History</h2>
+        <p>A comprehensive log of all historical alerts, filtered by severity and date.</p>
+      </div>
+    </div>
+
+    <div class="tab-content hidden" id="tab-analytics">
+      <div class="placeholder-card glass-panel">
+        <h2><i class="fas fa-chart-line"></i> Safety Analytics</h2>
+        <p>Driver scorecards, drowsiness trends, and overall journey safety metrics.</p>
+      </div>
+    </div>
+
+    <div class="tab-content hidden" id="tab-settings">
+      <div class="placeholder-card glass-panel">
+        <h2><i class="fas fa-gear"></i> System Settings</h2>
+        <p>Configure detection thresholds, emergency contacts, and camera inputs.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Emergency Modal -->
+<div id="em-modal" class="em-modal hidden">
+  <div class="em-modal-box glass-panel">
+    <div class="em-modal-header">
+      <i class="fas fa-siren-on"></i>
+      <h2 id="em-modal-title">DRIVER EMERGENCY</h2>
+    </div>
+    <div class="em-modal-body" id="em-modal-body"></div>
+    <div class="em-modal-footer">
+      <a id="em-modal-call" href="tel:8073174477" class="btn-call">
+        <i class="fas fa-phone"></i> Call Emergency
+      </a>
+      <a id="em-modal-map" href="https://maps.app.goo.gl/Jfmo2wB7Qj98zHTQ9?g_st=aw"
+         target="_blank" class="btn-maps-big">
+        <i class="fas fa-location-dot"></i> Open Live Location
+      </a>
+      <button id="em-modal-close" class="btn-close-modal">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
-
