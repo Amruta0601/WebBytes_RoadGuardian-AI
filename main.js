@@ -176,6 +176,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setOverallStatus('safe');
   });
 
+  function switchToDashboardTab() {
+    const navDashboard = document.querySelector('.nav-item[data-tab="dashboard"]');
+    if (navDashboard && !navDashboard.classList.contains('active')) {
+      navDashboard.click();
+    }
+  }
+
   // ════════════════════════════════════════════════════════════════
   // 4. Socket Events
   // ════════════════════════════════════════════════════════════════
@@ -189,6 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (data.severity === 'critical') {
       triggerAlarmOverlay();
+      switchToDashboardTab();
     } else if (data.severity === 'high') {
       setOverallStatus('warn');
     }
@@ -216,6 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (data.incident_type !== 'system_init') {
       appendLog('EMERGENCY_ESCALATION', `Full emergency workflow activated. Notifying ${data.emergency_number}.`, 'critical', data.timestamp);
       triggerAlarmOverlay();
+      switchToDashboardTab();
       showEmergencyModal(data);
     }
   });
