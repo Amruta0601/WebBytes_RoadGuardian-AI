@@ -216,32 +216,79 @@
       </div>
     </div>
     
-    <!-- Other Tabs (Placeholders) -->
+    <!-- Other Tabs -->
     <div class="tab-content hidden" id="tab-cameras">
-      <div class="placeholder-card glass-panel">
-        <h2><i class="fas fa-video"></i> All Camera Feeds</h2>
-        <p>In a full deployment, all 360° vehicle camera feeds would be accessible here.</p>
+      <div class="glass-panel" style="padding:1.5rem; height:100%; display:flex; flex-direction:column; gap:1rem;">
+        <div class="card-header"><div class="card-title"><i class="fas fa-video blue-icon"></i><h3>All Vehicle Camera Feeds</h3></div></div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; flex:1;">
+          <div class="video-feed"><img src="https://placehold.co/640x360/0f172a/3b82f6?text=Front+Dash+Cam" alt="Front"></div>
+          <div class="video-feed"><img src="https://placehold.co/640x360/0f172a/8b5cf6?text=Rear+Camera" alt="Rear"></div>
+          <div class="video-feed"><img src="https://placehold.co/640x360/0f172a/10b981?text=Left+Blindspot" alt="Left"></div>
+          <div class="video-feed"><img src="https://placehold.co/640x360/0f172a/f59e0b?text=Right+Blindspot" alt="Right"></div>
+        </div>
       </div>
     </div>
 
     <div class="tab-content hidden" id="tab-alerts">
-      <div class="placeholder-card glass-panel">
-        <h2><i class="fas fa-bell"></i> Alert History</h2>
-        <p>A comprehensive log of all historical alerts, filtered by severity and date.</p>
+      <div class="glass-panel" style="padding:1.5rem; height:100%;">
+        <div class="card-header" style="margin-bottom:1rem;"><div class="card-title"><i class="fas fa-bell orange-icon"></i><h3>Historical Alert Log</h3></div></div>
+        <table style="width:100%; text-align:left; border-collapse: collapse; font-size: 0.9rem;">
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.1); color:var(--text-muted);">
+            <th style="padding:0.75rem;">Date / Time</th><th style="padding:0.75rem;">Type</th><th style="padding:0.75rem;">Severity</th><th style="padding:0.75rem;">Status</th>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:0.75rem;">Today, 10:42 AM</td><td>Driver Drowsiness</td><td><span class="chip chip-warn">Warning</span></td><td>Resolved</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+            <td style="padding:0.75rem;">Yesterday, 04:15 PM</td><td>Lane Departure</td><td><span class="chip chip-info">Info</span></td><td>Logged</td>
+          </tr>
+          <tr>
+            <td style="padding:0.75rem;">Mon, 08:30 AM</td><td>Harsh Braking</td><td><span class="chip chip-danger">Danger</span></td><td>Resolved</td>
+          </tr>
+        </table>
       </div>
     </div>
 
     <div class="tab-content hidden" id="tab-analytics">
-      <div class="placeholder-card glass-panel">
-        <h2><i class="fas fa-chart-line"></i> Safety Analytics</h2>
-        <p>Driver scorecards, drowsiness trends, and overall journey safety metrics.</p>
+      <div class="glass-panel" style="padding:1.5rem; height:100%;">
+        <div class="card-header" style="margin-bottom:2rem;"><div class="card-title"><i class="fas fa-chart-line green-icon"></i><h3>Safety Scorecard</h3></div></div>
+        <div style="display:flex; gap:3rem; align-items:center;">
+          <div style="width:150px; height:150px; border-radius:50%; border:10px solid var(--green); display:flex; align-items:center; justify-content:center; font-size:2.5rem; font-weight:bold; box-shadow: 0 0 20px rgba(16,185,129,0.3);">
+            94
+          </div>
+          <div style="flex:1;">
+            <p style="margin-bottom:1rem; color:var(--text-muted); font-size:1.1rem;">Overall Driver Safety Score (Last 30 Days)</p>
+            <div style="background:rgba(0,0,0,0.3); padding:1.5rem; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+              <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;"><span>Attentiveness</span><span style="color:var(--green);">98%</span></div>
+              <div style="width:100%; background:rgba(0,0,0,0.5); height:8px; border-radius:4px; margin-bottom:1.5rem;"><div style="width:98%; background:var(--green); height:100%; border-radius:4px; box-shadow:0 0 10px var(--green);"></div></div>
+              
+              <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;"><span>Posture & Health</span><span style="color:var(--orange);">82%</span></div>
+              <div style="width:100%; background:rgba(0,0,0,0.5); height:8px; border-radius:4px;"><div style="width:82%; background:var(--orange); height:100%; border-radius:4px; box-shadow:0 0 10px var(--orange);"></div></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="tab-content hidden" id="tab-settings">
-      <div class="placeholder-card glass-panel">
-        <h2><i class="fas fa-gear"></i> System Settings</h2>
-        <p>Configure detection thresholds, emergency contacts, and camera inputs.</p>
+      <div class="glass-panel" style="padding:1.5rem; height:100%;">
+        <div class="card-header" style="margin-bottom:1.5rem;"><div class="card-title"><i class="fas fa-gear purple-icon"></i><h3>System Configuration</h3></div></div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem;">
+          <div style="background:rgba(0,0,0,0.3); padding:1.5rem; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+            <h4 style="margin-bottom:1.5rem; color:var(--text);"><i class="fas fa-sliders blue-icon"></i> Detection Thresholds</h4>
+            <label style="display:flex; justify-content:space-between; margin-bottom:1rem; align-items:center;"><span>Drowsiness Time (sec)</span><input type="number" value="4" style="width:60px; background:#1e293b; color:#fff; border:1px solid rgba(255,255,255,0.1); padding:6px; border-radius:4px; text-align:center;"></label>
+            <label style="display:flex; justify-content:space-between; margin-bottom:1rem; align-items:center;"><span>Collapse Timer (sec)</span><input type="number" value="3" style="width:60px; background:#1e293b; color:#fff; border:1px solid rgba(255,255,255,0.1); padding:6px; border-radius:4px; text-align:center;"></label>
+            <label style="display:flex; justify-content:space-between; align-items:center;"><span>System Sensitivity</span><input type="range" style="width:120px;" value="80"></label>
+          </div>
+          <div style="background:rgba(0,0,0,0.3); padding:1.5rem; border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+            <h4 style="margin-bottom:1.5rem; color:var(--text);"><i class="fas fa-phone-volume orange-icon"></i> Emergency Contacts</h4>
+            <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.25rem;">Primary Responder</label>
+            <input type="text" value="8073174477" style="width:100%; background:#1e293b; color:#fff; border:1px solid rgba(255,255,255,0.1); padding:10px; border-radius:6px; margin-bottom:1rem;">
+            <label style="display:block; font-size:0.8rem; color:var(--text-muted); margin-bottom:0.25rem;">Secondary Backup</label>
+            <input type="text" placeholder="+ Add secondary contact..." style="width:100%; background:#1e293b; color:#fff; border:1px dashed rgba(255,255,255,0.2); padding:10px; border-radius:6px;">
+            <button class="btn-upload" style="margin-top:1.5rem; width:100%; padding:0.6rem;"><i class="fas fa-save"></i> Save Configuration</button>
+          </div>
+        </div>
       </div>
     </div>
   </main>
