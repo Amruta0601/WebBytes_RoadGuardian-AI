@@ -39,7 +39,8 @@ class DriverMonitor:
     EAR_THRESH          = 0.22   # eye-aspect-ratio below this → eyes closed
     DROWSY_SECONDS      = 4.0   # eyes must be closed this long to alarm
     CHEST_PAIN_SECONDS  = 5.0   # hands near chest this long to alarm
-    HEAD_SLUMP_THRESH   = 0.18  # nose.y - shoulder_avg.y; increased to make it easier to trigger
+    HEAD_SLUMP_THRESH   = 0.12  # nose.y - shoulder_avg.y; reduced from 0.18 to prevent false positive nodules
+    COLLAPSE_SECONDS    = 3.0   # must maintain slump for this duration
     NO_FACE_FRAMES      = 60    # consecutive frames with no face → "no driver"
     CHEST_DIST_THRESH   = 0.35  # increased from 0.13 to make it much easier to detect hands on chest
 
@@ -51,6 +52,7 @@ class DriverMonitor:
         # Timers
         self._eye_closed_start  = None
         self._chest_hold_start  = None
+        self._collapse_start    = None
         self._no_face_counter   = 0
 
         # Alarm audio state
@@ -243,11 +245,29 @@ class DriverMonitor:
                     ls_y       = lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y
                     rs_y       = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y
                     shoulder_y = (ls_y + rs_y) / 2.0
+                    
                     if (shoulder_y - nose_y_n) < self.HEAD_SLUMP_THRESH:
-                        emergency_type = "collapse"
-                        self._put_text(frame, "!! COLLAPSE DETECTED !!", 95, (0, 0, 255))
+                        if self._collapse_start is None:
+                            self._collapse_start = now
+                        slumped_for = now - self._collapse_start
+                        pct = min(slumped_for / self.COLLAPSE_SECONDS, 1.0)
+                        bar_w = int(200 * pct)
+                        cv2.rectangle(frame, (10, h - 125), (10 + bar_w, h - 110),
+                                      (0, 165, 255), -1)
+                        cv2.rectangle(frame, (10, h - 125), (210, h - 110),
+                                      (100, 100, 100), 1)
+                        self._put_text(frame,
+                                       f"Head Slump: {slumped_for:.1f}s / {self.COLLAPSE_SECONDS}s",
+                                       h - 130, (0, 165, 255))
+                                       
+                        if slumped_for >= self.COLLAPSE_SECONDS:
+                            emergency_type = "collapse"
+                            self._put_text(frame, "!! COLLAPSE DETECTED !!", 95, (0, 0, 255))
+                    else:
+                        self._collapse_start = None
                 else:
                     self._chest_hold_start = None
+                    self._collapse_start = None
 
                 # ── Passenger count overlay ───────────────────────────── #
                 passengers = max(0, num_faces - 1)
