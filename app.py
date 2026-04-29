@@ -1,70 +1,91 @@
 import os
-import socket
 import time
+import threading
+
 from flask import Flask, render_template, Response, jsonify, request
 from flask_socketio import SocketIO
 from werkzeug.utils import secure_filename
+
 from ai_modules.driver_monitor import DriverMonitor
 from ai_modules.cctv_monitor import CCTVMonitor
 
+# ── App setup ─────────────────────────────────────────────────────────────── #
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret!'
+app.config["SECRET_KEY"] = "safeguard_ai_secret_2024"
 app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "uploads")
-# Force standard threading mode to avoid Eventlet on Windows.
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB
 
-ALLOWED_VIDEO_EXTENSIONS = {"mp4", "avi", "mov", "mkv", "webm"}
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
-# Initialize AI monitors
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="threading",
+    logger=False,
+    engineio_logger=False,
+)
+
+ALLOWED_EXTS = {"mp4", "avi", "mov", "mkv", "webm"}
+
+# ── AI modules ────────────────────────────────────────────────────────────── #
 driver_monitor = DriverMonitor(socketio)
-cctv_monitor = CCTVMonitor(socketio)
+cctv_monitor   = CCTVMonitor(socketio)
 
-@app.route('/')
+
+# ── Routes ────────────────────────────────────────────────────────────────── #
+@app.route("/")
 def index():
-    return render_template('index.html')
+    return render_template("index.html")
 
-def gen_driver_frames():
+
+def _gen_driver():
     for frame in driver_monitor.generate_frames():
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
 
-def gen_cctv_frames():
+
+def _gen_cctv():
     for frame in cctv_monitor.generate_frames():
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
 
-@app.route('/driver_video_feed')
+
+@app.route("/driver_video_feed")
 def driver_video_feed():
-    return Response(gen_driver_frames(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(_gen_driver(),
+                    mimetype="multipart/x-mixed-replace; boundary=frame")
 
-@app.route('/cctv_video_feed')
+
+@app.route("/cctv_video_feed")
 def cctv_video_feed():
-    return Response(gen_cctv_frames(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+    return Response(_gen_cctv(),
+                    mimetype="multipart/x-mixed-replace; boundary=frame")
 
-@app.route('/api/status')
-def status():
+
+@app.route("/api/status")
+def api_status():
     return jsonify({
         "driver_status": driver_monitor.get_status(),
-        "cctv_status": cctv_monitor.get_status()
+        "cctv_status":   cctv_monitor.get_status(),
     })
 
 
-def allowed_video_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_VIDEO_EXTENSIONS
+@app.route("/api/emergency_info")
+def api_emergency_info():
+    location = driver_monitor.alert_system.get_location()
+    nearby   = driver_monitor.alert_system._get_nearby_services(location)
+    return jsonify({
+        "ok":              True,
+        "location":        location,
+        "nearby_services": nearby,
+        "emergency_number": driver_monitor.alert_system.emergency_number,
+        "voice_message":   (
+            "Emergency voice message will be generated and read aloud "
+            "automatically when a driver-only emergency is detected."
+        ),
+    })
 
 
-def pick_available_port(start_port):
-    port = start_port
-    while port < start_port + 20:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            if s.connect_ex(("127.0.0.1", port)) != 0:
-                return port
-        port += 1
-    return start_port
+def _allowed(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTS
 
 
 @app.route("/api/upload_cctv_video", methods=["POST"])
@@ -72,51 +93,64 @@ def upload_cctv_video():
     if "video" not in request.files:
         return jsonify({"ok": False, "error": "No file part named 'video'"}), 400
 
-    file = request.files["video"]
-    if file.filename == "":
+    f = request.files["video"]
+    if f.filename == "":
         return jsonify({"ok": False, "error": "No file selected"}), 400
 
-    if not allowed_video_file(file.filename):
-        return jsonify(
-            {
-                "ok": False,
-                "error": "Unsupported format. Use mp4, avi, mov, mkv, or webm.",
-            }
-        ), 400
+    if not _allowed(f.filename):
+        return jsonify({"ok": False,
+                        "error": "Unsupported format. Use mp4, avi, mov, mkv, webm."}), 400
 
-    safe_name = secure_filename(file.filename)
-    unique_name = f"{int(time.time())}_{safe_name}"
-    save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_name)
-    file.save(save_path)
-    cctv_monitor.set_video_source(save_path)
+    safe    = secure_filename(f.filename)
+    unique  = f"{int(time.time())}_{safe}"
+    path    = os.path.join(app.config["UPLOAD_FOLDER"], unique)
+    f.save(path)
+    cctv_monitor.set_video_source(path)
 
-    return jsonify(
-        {
-            "ok": True,
-            "message": "Traffic sample uploaded. CCTV stream switched to uploaded video.",
-            "filename": unique_name,
-        }
-    )
+    return jsonify({
+        "ok":       True,
+        "message":  f"Video '{safe}' uploaded. Accident detection started.",
+        "filename": unique,
+    })
 
 
+# ── SocketIO events ───────────────────────────────────────────────────────── #
 @socketio.on("trigger_sos")
-def handle_trigger_sos(data):
-    # Trigger a real alert so all connected clients receive it.
+def handle_sos(data):
     driver_monitor.alert_system.trigger_alert(
         "MANUAL_SOS",
-        f"Manual emergency trigger activated by {data.get('user', 'user')}.",
+        f"Manual SOS triggered by {data.get('user', 'Admin')}. Immediate assistance needed.",
         severity="critical",
     )
+    driver_monitor.alert_system.escalate_driver_only_emergency("manual_sos")
 
-if __name__ == '__main__':
-    requested_port = int(os.environ.get("PORT", "5001"))
-    run_port = pick_available_port(requested_port)
-    if run_port != requested_port:
-        print(f"Port {requested_port} busy, using {run_port} instead.")
+
+@socketio.on("connect")
+def handle_connect():
+    # Send current emergency info on connect so UI is pre-populated
+    location = driver_monitor.alert_system.get_location()
+    nearby   = driver_monitor.alert_system._get_nearby_services(location)
+    socketio.emit("emergency_escalation", {
+        "incident_type":    "system_init",
+        "location":         location,
+        "nearby_services":  nearby,
+        "emergency_number": driver_monitor.alert_system.emergency_number,
+        "voice_message":    "System initialised. Monitoring active.",
+        "timestamp":        time.strftime("%Y-%m-%d %H:%M:%S"),
+    }, to=request.sid)
+
+
+# ── Entry point ───────────────────────────────────────────────────────────── #
+if __name__ == "__main__":
+    print("=" * 55)
+    print("  SafeGuard AI — Smart Accident Prevention System")
+    print("  Running at  http://127.0.0.1:5001")
+    print("=" * 55)
     socketio.run(
         app,
-        debug=True,
-        port=run_port,
+        host="0.0.0.0",
+        port=5001,
+        debug=False,
         allow_unsafe_werkzeug=True,
         use_reloader=False,
     )
