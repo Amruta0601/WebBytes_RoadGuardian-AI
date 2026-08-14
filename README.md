@@ -22,6 +22,7 @@ An AI-based system that detects driver drowsiness, chest pain, and unsafe behavi
 - Head drop detection
 - Chest pain detection
 - Alarm system
+- Gps tracker
 
 ## 📌 Future Improvements
 - Mobile app integration
