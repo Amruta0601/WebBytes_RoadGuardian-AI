@@ -27,3 +27,4 @@ An AI-based system that detects driver drowsiness, chest pain, and unsafe behavi
 ## 📌 Future Improvements
 - Mobile app integration
 - Emergency alert system
+- Automatic voice message 
